@@ -39,30 +39,34 @@ class UARTService(Service):
     """
     Provide UART-like functionality via the Nordic NUS service.
 
-    :param int timeout:  the timeout in seconds to wait
-      for the first character and between subsequent characters.
-    :param int buffer_size: buffer up to this many bytes.
+    :param int rx_timeout:  the timeout in seconds to wait
+      for the first character and between subsequent characters when receiving.
+    :param int rx_buffer_size: buffer up to this many bytes when receiving.
       If more bytes are received, older bytes will be discarded.
+
+    There are no corresponding ``tx_timeout`` and ``tx_buffer_size`` parameters because writes
+    are blocking.
 
     See ``examples/ble_uart_echo_test.py`` for a usage example.
     """
     # pylint: disable=no-member
     uuid = VendorUUID("6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
-    _server_tx = StreamOut(uuid=VendorUUID("6E400003-B5A3-F393-E0A9-E50E24DCCA9E"),
-                           timeout=1.0, buffer_size=64)
-    _server_rx = StreamIn(uuid=VendorUUID("6E400002-B5A3-F393-E0A9-E50E24DCCA9E"),
-                          timeout=1.0, buffer_size=64)
+    _server_tx_uuid = VendorUUID("6E400003-B5A3-F393-E0A9-E50E24DCCA9E")
+    _server_rx_uuid = VendorUUID("6E400002-B5A3-F393-E0A9-E50E24DCCA9E")
 
-    def __init__(self, service=None):
+    def __init__(self, service=None, rx_timeout=1.0, rx_buffer_size=64):
         super().__init__(service=service)
         self.connectable = True
         if not service:
-            self._rx = self._server_rx
-            self._tx = self._server_tx
+            self._rx = StreamIn(uuid=self._server_rx_uuid,
+                                timeout=rx_timeout, buffer_size=rx_buffer_size)
+            self._tx = StreamOut(uuid=self._server_tx_uuid)
         else:
-            # If we're a client then swap the characteristics we use.
-            self._tx = self._server_rx
-            self._rx = self._server_tx
+            # If we're a client then we're talking to a remote service.
+            # then swap the characteristics we use.
+            self._rx = StreamOut(uuid=self._server_tx_uuid,
+                                 timeout=rx_timeout, buffer_size=rx_buffer_size)
+            self._tx = StreamIn(uuid=self._server_rx_uuid)
 
     def read(self, nbytes=None):
         """
