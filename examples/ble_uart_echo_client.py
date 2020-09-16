@@ -10,27 +10,26 @@ from adafruit_ble.services.nordic import UARTService
 
 ble = BLERadio()
 while True:
-    while ble.connected and any(
-        UARTService in connection for connection in ble.connections
-    ):
-        for connection in ble.connections:
-            if UARTService not in connection:
-                continue
-            print("echo")
-            uart = connection[UARTService]
-            uart.write(b"echo")
-            # Returns b'' if nothing was read.
-            one_byte = uart.read(4)
-            if one_byte:
-                print(one_byte)
-            print()
-        time.sleep(1)
+    print("Checking advertisements...")
+    for advertisement in ble.start_scan(ProvideServicesAdvertisement):
+        if UARTService in advertisement.services:
+            connection = ble.connect(advertisement)
+            print("connected")
+            break
+
+    # Stop scanning whether or not we are connected.
+    ble.stop_scan()
+
+    uart = connection[UARTService]
+    buf = bytearray(1)
+    while connection.connected:
+        buf[0] = (buf[0] + 1) % 256
+        print("sent:", buf)
+        uart.write(buf)
+        # Returns b'' if nothing was read.
+        echo = uart.read(1)
+        if echo:
+            print("rcvd", echo)
 
     print("disconnected, scanning")
-    for advertisement in ble.start_scan(ProvideServicesAdvertisement, timeout=1):
-        if UARTService not in advertisement.services:
-            continue
-        ble.connect(advertisement)
-        print("connected")
-        break
-    ble.stop_scan()
+    connection = None
